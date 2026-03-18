@@ -54,7 +54,9 @@
   .constellation-toggle input[type="checkbox"] { margin-right: 6px; flex-shrink: 0; }
   .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
   .dot-blacksky { background: #00ff88; }
+  .dot-planet { background: #33ccff; }
   .dot-umbra { background: #ff6600; }
+  .dot-capella { background: #ffd933; }
   .dot-hawkeye { background: #aa44ff; }
   .dot-ship { background: #ffdd00; }
   .dot-aircraft { background: #00ddff; }
@@ -85,7 +87,9 @@
   #contact-log::-webkit-scrollbar-thumb { background: #1a3a5c; }
   .contact-entry { padding: 3px 0; border-bottom: 1px solid rgba(40, 70, 120, 0.2); }
   .contact-entry.blacksky { border-left: 2px solid #00ff88; padding-left: 6px; }
+  .contact-entry.planet { border-left: 2px solid #33ccff; padding-left: 6px; }
   .contact-entry.umbra { border-left: 2px solid #ff6600; padding-left: 6px; }
+  .contact-entry.capella { border-left: 2px solid #ffd933; padding-left: 6px; }
   .contact-entry.hawkeye { border-left: 2px solid #aa44ff; padding-left: 6px; }
 
   .stat-row { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0; }
@@ -127,17 +131,29 @@
   <h2>Constellation Simulation</h2>
 
   <div class="section">
-    <h3>Constellations</h3>
+    <h3>Constellations — EOIR</h3>
     <div class="constellation-toggle">
       <input type="checkbox" id="toggle-blacksky" checked>
       <span class="dot dot-blacksky"></span>
       <label for="toggle-blacksky">BlackSky EOIR (15 sats)</label>
     </div>
     <div class="constellation-toggle">
+      <input type="checkbox" id="toggle-planet" checked>
+      <span class="dot dot-planet"></span>
+      <label for="toggle-planet">Planet Labs EOIR (150 sats)</label>
+    </div>
+    <h3 style="margin-top:8px;">Constellations — SAR</h3>
+    <div class="constellation-toggle">
       <input type="checkbox" id="toggle-umbra" checked>
       <span class="dot dot-umbra"></span>
       <label for="toggle-umbra">Umbra SAR (10 sats)</label>
     </div>
+    <div class="constellation-toggle">
+      <input type="checkbox" id="toggle-capella" checked>
+      <span class="dot dot-capella"></span>
+      <label for="toggle-capella">Capella Space SAR (16 sats)</label>
+    </div>
+    <h3 style="margin-top:8px;">Constellations — RF/SIGINT</h3>
     <div class="constellation-toggle">
       <input type="checkbox" id="toggle-hawkeye" checked>
       <span class="dot dot-hawkeye"></span>
@@ -361,10 +377,22 @@ const CONSTELLATIONS = {
     halfAngle: NADIR_LIMIT_DEG, swathKm: 16,
     sats: makeConstellation({ count: 15, altKm: 450, incDeg: 97.1, planes: 5, raanSpread: 180 })
   },
+  planet: {
+    name: 'Planet Labs', type: 'EOIR', color: 0x33ccff, css: '#33ccff',
+    halfAngle: NADIR_LIMIT_DEG, swathKm: 24,
+    sats: makeConstellation({ count: 150, altKm: 525, incDeg: 98.0, planes: 15, raanSpread: 360 })
+  },
   umbra: {
     name: 'Umbra', type: 'SAR', color: 0xff6600, css: '#ff6600',
     halfAngle: NADIR_LIMIT_DEG, swathKm: 50,
     sats: makeConstellation({ count: 10, altKm: 525, incDeg: 97.4, planes: 5, raanSpread: 150 })
+  },
+  capella: {
+    name: 'Capella Space', type: 'SAR', color: 0xffd933, css: '#ffd933',
+    halfAngle: NADIR_LIMIT_DEG, swathKm: 40,
+    // 16 SAR sats: 8 SSO + 8 mid-inclination
+    sats: makeConstellation({ count: 8, altKm: 590, incDeg: 97.8, planes: 4, raanSpread: 180 })
+      .concat(makeConstellation({ count: 8, altKm: 525, incDeg: 45, planes: 4, raanSpread: 360 }))
   },
   hawkeye: {
     name: 'HawkEye 360', type: 'RF/SIGINT', color: 0xaa44ff, css: '#aa44ff',
@@ -666,38 +694,80 @@ function initScene() {
   });
 }
 
+// Global camera state
+let camSph = { theta: 0, phi: Math.PI / 2.5, r: 4 };
+let camAnim = { active: false, startTime: 0, duration: 1.2,
+  startTheta: 0, startPhi: 0, endTheta: 0, endPhi: 0 };
+
+function updateCam() {
+  camera.position.set(
+    camSph.r * Math.sin(camSph.phi) * Math.sin(camSph.theta),
+    camSph.r * Math.cos(camSph.phi),
+    camSph.r * Math.sin(camSph.phi) * Math.cos(camSph.theta)
+  );
+  camera.lookAt(0, 0, 0);
+}
+
+function flyToTarget(lat, lon) {
+  // Compute target position in scene coords (accounting for Earth rotation)
+  const gmst = getGMST(simTime);
+  const pos = llToScene(lat, lon, 0);
+  pos.applyAxisAngle(new THREE.Vector3(0, 1, 0), -gmst);
+
+  // Convert to spherical angles
+  const mag = pos.length();
+  if (mag < 0.001) return;
+  const nx = pos.x / mag, ny = pos.y / mag, nz = pos.z / mag;
+  const targetPhi = Math.acos(Math.max(-0.999, Math.min(0.999, ny)));
+  const targetTheta = Math.atan2(nx, nz);
+
+  // Shortest-path theta (avoid spinning the long way)
+  let dTheta = targetTheta - camSph.theta;
+  if (dTheta > Math.PI) dTheta -= 2 * Math.PI;
+  if (dTheta < -Math.PI) dTheta += 2 * Math.PI;
+
+  camAnim.startTheta = camSph.theta;
+  camAnim.startPhi = camSph.phi;
+  camAnim.endTheta = camSph.theta + dTheta;
+  camAnim.endPhi = targetPhi;
+  camAnim.startTime = performance.now();
+  camAnim.duration = 1200; // ms
+  camAnim.active = true;
+}
+
+function tickCameraAnimation(t) {
+  if (!camAnim.active) return;
+  let p = Math.min((t - camAnim.startTime) / camAnim.duration, 1);
+  // Smoothstep easing
+  p = p * p * (3 - 2 * p);
+  camSph.theta = camAnim.startTheta + (camAnim.endTheta - camAnim.startTheta) * p;
+  camSph.phi = camAnim.startPhi + (camAnim.endPhi - camAnim.startPhi) * p;
+  updateCam();
+  if (p >= 1) camAnim.active = false;
+}
+
 function initCameraControls() {
   let dragging = false, prev = { x: 0, y: 0 };
-  let sph = { theta: 0, phi: Math.PI / 2.5, r: 4 };
-
-  function updateCam() {
-    camera.position.set(
-      sph.r * Math.sin(sph.phi) * Math.sin(sph.theta),
-      sph.r * Math.cos(sph.phi),
-      sph.r * Math.sin(sph.phi) * Math.cos(sph.theta)
-    );
-    camera.lookAt(0, 0, 0);
-  }
 
   const el = renderer.domElement;
-  el.addEventListener('mousedown', e => { dragging = true; prev = { x: e.clientX, y: e.clientY }; });
+  el.addEventListener('mousedown', e => { dragging = true; camAnim.active = false; prev = { x: e.clientX, y: e.clientY }; });
   el.addEventListener('mousemove', e => {
     if (!dragging) return;
-    sph.theta -= (e.clientX - prev.x) * 0.005;
-    sph.phi = Math.max(0.1, Math.min(Math.PI - 0.1, sph.phi + (e.clientY - prev.y) * 0.005));
+    camSph.theta -= (e.clientX - prev.x) * 0.005;
+    camSph.phi = Math.max(0.1, Math.min(Math.PI - 0.1, camSph.phi + (e.clientY - prev.y) * 0.005));
     prev = { x: e.clientX, y: e.clientY };
     updateCam();
   });
   el.addEventListener('mouseup', () => dragging = false);
   el.addEventListener('mouseleave', () => dragging = false);
-  el.addEventListener('wheel', e => { sph.r = Math.max(1.5, Math.min(15, sph.r + e.deltaY * 0.002)); updateCam(); });
+  el.addEventListener('wheel', e => { camSph.r = Math.max(1.5, Math.min(15, camSph.r + e.deltaY * 0.002)); updateCam(); });
 
   // Touch
-  el.addEventListener('touchstart', e => { if (e.touches.length === 1) { dragging = true; prev = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } });
+  el.addEventListener('touchstart', e => { if (e.touches.length === 1) { dragging = true; camAnim.active = false; prev = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } });
   el.addEventListener('touchmove', e => {
     if (!dragging || e.touches.length !== 1) return;
-    sph.theta -= (e.touches[0].clientX - prev.x) * 0.005;
-    sph.phi = Math.max(0.1, Math.min(Math.PI - 0.1, sph.phi + (e.touches[0].clientY - prev.y) * 0.005));
+    camSph.theta -= (e.touches[0].clientX - prev.x) * 0.005;
+    camSph.phi = Math.max(0.1, Math.min(Math.PI - 0.1, camSph.phi + (e.touches[0].clientY - prev.y) * 0.005));
     prev = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     updateCam();
   });
@@ -882,6 +952,8 @@ function updateTarget() {
   targetLabelEl.textContent = target.name;
   cachedContactAnalysis = null;
   lastContactCompute = 0;
+  // Animate globe to center on target
+  flyToTarget(target.lat, target.lon);
 }
 
 function selectQuickTarget() {
@@ -1045,6 +1117,9 @@ function animate(t) {
   frameCount++;
 
   if (!paused) simTime = new Date(simTime.getTime() + dtReal * simSpeed * 1000);
+
+  // Tick camera fly-to animation
+  tickCameraAnimation(t);
 
   const gmst = getGMST(simTime);
   const tSec = (simTime - new Date(2024, 0, 1)) / 1000;
