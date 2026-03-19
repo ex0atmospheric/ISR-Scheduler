@@ -131,34 +131,42 @@
   <h2>Constellation Simulation</h2>
 
   <div class="section">
-    <h3>Constellations — EOIR</h3>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <h3 style="margin:0;">Constellation Sources</h3>
+      <div>
+        <button onclick="toggleAllConstellations(true)" style="padding:2px 6px;font-size:9px;">All On</button>
+        <button onclick="toggleAllConstellations(false)" style="padding:2px 6px;font-size:9px;">All Off</button>
+      </div>
+    </div>
+    <div style="font-size:9px;color:#4a7a9a;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">EOIR</div>
     <div class="constellation-toggle">
-      <input type="checkbox" id="toggle-blacksky" checked>
+      <input type="checkbox" id="toggle-blacksky" checked onchange="onConstellationToggle()">
       <span class="dot dot-blacksky"></span>
-      <label for="toggle-blacksky">BlackSky EOIR (15 sats)</label>
+      <label for="toggle-blacksky">BlackSky (15 sats)</label>
     </div>
     <div class="constellation-toggle">
-      <input type="checkbox" id="toggle-planet" checked>
+      <input type="checkbox" id="toggle-planet" checked onchange="onConstellationToggle()">
       <span class="dot dot-planet"></span>
-      <label for="toggle-planet">Planet Labs EOIR (150 sats)</label>
+      <label for="toggle-planet">Planet Labs (150 sats)</label>
     </div>
-    <h3 style="margin-top:8px;">Constellations — SAR</h3>
+    <div style="font-size:9px;color:#4a7a9a;margin:6px 0 4px;text-transform:uppercase;letter-spacing:0.5px;">SAR</div>
     <div class="constellation-toggle">
-      <input type="checkbox" id="toggle-umbra" checked>
+      <input type="checkbox" id="toggle-umbra" checked onchange="onConstellationToggle()">
       <span class="dot dot-umbra"></span>
-      <label for="toggle-umbra">Umbra SAR (10 sats)</label>
+      <label for="toggle-umbra">Umbra (10 sats)</label>
     </div>
     <div class="constellation-toggle">
-      <input type="checkbox" id="toggle-capella" checked>
+      <input type="checkbox" id="toggle-capella" checked onchange="onConstellationToggle()">
       <span class="dot dot-capella"></span>
-      <label for="toggle-capella">Capella Space SAR (16 sats)</label>
+      <label for="toggle-capella">Capella Space (16 sats)</label>
     </div>
-    <h3 style="margin-top:8px;">Constellations — RF/SIGINT</h3>
+    <div style="font-size:9px;color:#4a7a9a;margin:6px 0 4px;text-transform:uppercase;letter-spacing:0.5px;">RF / SIGINT</div>
     <div class="constellation-toggle">
-      <input type="checkbox" id="toggle-hawkeye" checked>
+      <input type="checkbox" id="toggle-hawkeye" checked onchange="onConstellationToggle()">
       <span class="dot dot-hawkeye"></span>
       <label for="toggle-hawkeye">HawkEye 360 (21 sats)</label>
     </div>
+    <div id="active-sat-count" style="margin-top:6px;font-size:10px;color:#6688aa;"></div>
   </div>
 
   <div class="section">
@@ -242,20 +250,34 @@
   </div>
 
   <div class="section">
+    <h3>Sensor Geometry</h3>
+    <label>Sensor Half-Angle (°) <span id="ha-val" style="color:#4a9eff">5</span></label>
+    <input type="range" id="sensor-half-angle" min="1" max="45" step="0.5" value="5"
+      style="width:100%;margin-bottom:4px;accent-color:#4a9eff;"
+      oninput="updateSensorGeometry()">
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:#556677;margin-bottom:6px;">
+      <span>1° (narrow)</span><span>45° (wide)</span>
+    </div>
+    <label>Max Slant Angle (°) <span id="sa-val" style="color:#4a9eff">45</span></label>
+    <input type="range" id="max-slant-angle" min="5" max="70" step="0.5" value="45"
+      style="width:100%;margin-bottom:4px;accent-color:#ff8844;"
+      oninput="updateSensorGeometry()">
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:#556677;margin-bottom:6px;">
+      <span>5° (near-nadir)</span><span>70° (extreme)</span>
+    </div>
+    <div id="sensor-info" style="font-size:10px;color:#6688aa;margin-top:2px;"></div>
+  </div>
+
+  <div class="section">
     <h3>Display Options</h3>
     <div class="constellation-toggle">
       <input type="checkbox" id="toggle-orbits" checked>
       <label for="toggle-orbits">Show Orbit Traces</label>
     </div>
-    <div class="constellation-toggle">
-      <input type="checkbox" id="toggle-coverage" checked>
-      <label for="toggle-coverage">Show Sensor Footprints</label>
-    </div>
-    <div class="constellation-toggle">
-      <input type="checkbox" id="toggle-terminator" checked>
-      <label for="toggle-terminator">Show Day/Night Terminator</label>
-    </div>
   </div>
+  <!-- Hidden state for removed toggles — keep variables accessible to JS -->
+  <input type="checkbox" id="toggle-coverage" checked style="display:none">
+  <input type="checkbox" id="toggle-terminator" checked style="display:none">
 </div>
 
 <div id="info-panel">
@@ -271,6 +293,14 @@
       <span class="stat-label">Min Elevation</span>
       <span class="stat-value" id="target-elev">10&deg;</span>
     </div>
+    <div class="stat-row">
+      <span class="stat-label">Sensor Half-Angle</span>
+      <span class="stat-value" id="info-ha">5&deg;</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Max Slant Angle</span>
+      <span class="stat-value" id="info-sa">45&deg;</span>
+    </div>
   </div>
 
   <div class="section">
@@ -282,6 +312,7 @@
 
   <div class="section">
     <h3>24hr Contact Summary</h3>
+    <button id="compute-contacts-btn" onclick="triggerContactCompute()" style="width:100%;margin-bottom:6px;">Compute Contacts</button>
     <div id="contact-summary">
       <div class="stat-row"><span class="stat-label">Analyzing...</span></div>
     </div>
@@ -369,7 +400,8 @@ function makeConstellation({ count, altKm, incDeg, planes, raanSpread }) {
   return sats;
 }
 
-const NADIR_LIMIT_DEG = 5; // max sensor look angle off nadir
+let NADIR_LIMIT_DEG = 5;       // sensor half-angle (FOV cone half-width)
+let MAX_SLANT_DEG = 45;        // max slant angle (off-nadir look limit for contact)
 
 const CONSTELLATIONS = {
   blacksky: {
@@ -449,7 +481,7 @@ function elevation(satEcef, gndEcef) {
   const el = 90 - Math.acos(cosZ) * RAD2DEG;
   // Nadir angle: angle at satellite between nadir (Earth center) and target
   const sR = Math.sqrt(satEcef.x ** 2 + satEcef.y ** 2 + satEcef.z ** 2);
-  const dotNadir = -(dx * satEcef.x + dy * satEcef.y + dz * satEcef.z) / (rng * sR);
+  const dotNadir = (dx * satEcef.x + dy * satEcef.y + dz * satEcef.z) / (rng * sR);
   const nadirAngle = Math.acos(Math.max(-1, Math.min(1, dotNadir))) * RAD2DEG;
   return { el, rng, nadirAngle };
 }
@@ -698,6 +730,7 @@ function initScene() {
 let camSph = { theta: 0, phi: Math.PI / 2.5, r: 4 };
 let camAnim = { active: false, startTime: 0, duration: 1.2,
   startTheta: 0, startPhi: 0, endTheta: 0, endPhi: 0 };
+let trackingTarget = false; // true while fly-to tracking is active
 
 function updateCam() {
   camera.position.set(
@@ -733,6 +766,7 @@ function flyToTarget(lat, lon) {
   camAnim.startTime = performance.now();
   camAnim.duration = 1200; // ms
   camAnim.active = true;
+  trackingTarget = true;
 }
 
 function tickCameraAnimation(t) {
@@ -750,23 +784,32 @@ function initCameraControls() {
   let dragging = false, prev = { x: 0, y: 0 };
 
   const el = renderer.domElement;
-  el.addEventListener('mousedown', e => { dragging = true; camAnim.active = false; prev = { x: e.clientX, y: e.clientY }; });
+  // mousedown: start drag but do NOT cancel target tracking
+  el.addEventListener('mousedown', e => { dragging = true; prev = { x: e.clientX, y: e.clientY }; });
   el.addEventListener('mousemove', e => {
     if (!dragging) return;
-    camSph.theta -= (e.clientX - prev.x) * 0.005;
+    // When tracking is active, only allow phi (vertical tilt); theta stays locked to the target
+    if (!trackingTarget) {
+      camSph.theta -= (e.clientX - prev.x) * 0.005;
+    }
     camSph.phi = Math.max(0.1, Math.min(Math.PI - 0.1, camSph.phi + (e.clientY - prev.y) * 0.005));
     prev = { x: e.clientX, y: e.clientY };
     updateCam();
   });
   el.addEventListener('mouseup', () => dragging = false);
   el.addEventListener('mouseleave', () => dragging = false);
+  // Double-click releases target tracking for free orbit
+  el.addEventListener('dblclick', () => { trackingTarget = false; camAnim.active = false; });
   el.addEventListener('wheel', e => { camSph.r = Math.max(1.5, Math.min(15, camSph.r + e.deltaY * 0.002)); updateCam(); });
 
   // Touch
-  el.addEventListener('touchstart', e => { if (e.touches.length === 1) { dragging = true; camAnim.active = false; prev = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } });
+  el.addEventListener('touchstart', e => { if (e.touches.length === 1) { dragging = true; prev = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } });
   el.addEventListener('touchmove', e => {
     if (!dragging || e.touches.length !== 1) return;
-    camSph.theta -= (e.touches[0].clientX - prev.x) * 0.005;
+    // When tracking is active, only allow phi (vertical tilt); theta stays locked to the target
+    if (!trackingTarget) {
+      camSph.theta -= (e.touches[0].clientX - prev.x) * 0.005;
+    }
     camSph.phi = Math.max(0.1, Math.min(Math.PI - 0.1, camSph.phi + (e.touches[0].clientY - prev.y) * 0.005));
     prev = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     updateCam();
@@ -830,7 +873,7 @@ function detectShipsAndAircraft(gmst) {
         const eci = propagate(sat, tSec);
         const ecef = eciToEcef(eci, gmst);
         const { nadirAngle } = elevation(ecef, se);
-        if (nadirAngle <= NADIR_LIMIT_DEG) { ship.detectedBy.push(c.name); break; }
+        if (nadirAngle <= MAX_SLANT_DEG) { ship.detectedBy.push(c.name); break; }
       }
     });
   });
@@ -845,7 +888,7 @@ function detectShipsAndAircraft(gmst) {
         const eci = propagate(sat, tSec);
         const ecef = eciToEcef(eci, gmst);
         const { nadirAngle } = elevation(ecef, ae);
-        if (nadirAngle <= NADIR_LIMIT_DEG) { ac.detectedBy.push(c.name); break; }
+        if (nadirAngle <= MAX_SLANT_DEG) { ac.detectedBy.push(c.name); break; }
       }
     });
   });
@@ -984,6 +1027,62 @@ function resetSim() {
   lastContactCompute = 0;
 }
 
+function toggleAllConstellations(state) {
+  Object.keys(CONSTELLATIONS).forEach(key => {
+    document.getElementById(`toggle-${key}`).checked = state;
+  });
+  onConstellationToggle();
+}
+
+function onConstellationToggle() {
+  // Force recompute 24hr contacts
+  cachedContactAnalysis = null;
+  lastContactCompute = 0;
+  // Update active satellite count
+  let total = 0, active = 0;
+  Object.keys(CONSTELLATIONS).forEach(key => {
+    const n = CONSTELLATIONS[key].sats.length;
+    total += n;
+    if (document.getElementById(`toggle-${key}`).checked) active += n;
+  });
+  document.getElementById('active-sat-count').innerHTML =
+    `<div class="stat-row"><span class="stat-label">Active Sources</span><span class="stat-value">${active} / ${total} sats</span></div>`;
+}
+
+function updateSensorGeometry() {
+  const ha = parseFloat(document.getElementById('sensor-half-angle').value);
+  const sa = parseFloat(document.getElementById('max-slant-angle').value);
+  NADIR_LIMIT_DEG = ha;
+  MAX_SLANT_DEG = sa;
+
+  // Update constellation halfAngles
+  Object.keys(CONSTELLATIONS).forEach(key => {
+    CONSTELLATIONS[key].halfAngle = ha;
+  });
+
+  document.getElementById('ha-val').textContent = ha.toFixed(1);
+  document.getElementById('sa-val').textContent = sa.toFixed(1);
+  document.getElementById('info-ha').textContent = ha.toFixed(1) + '\u00b0';
+  document.getElementById('info-sa').textContent = sa.toFixed(1) + '\u00b0';
+
+  // Compute ground footprint diameter for a representative altitude (525 km)
+  const altKm = 525;
+  const footprintRadKm = altKm * Math.tan(ha * DEG2RAD);
+  const footprintDiaKm = 2 * footprintRadKm;
+  const slantRadKm = altKm * Math.tan(sa * DEG2RAD);
+  const slantDiaKm = 2 * slantRadKm;
+  const slantRange = altKm / Math.cos(sa * DEG2RAD);
+
+  document.getElementById('sensor-info').innerHTML =
+    `<div class="stat-row"><span class="stat-label">FOV footprint (@ 525km)</span><span class="stat-value">${footprintDiaKm.toFixed(0)} km dia</span></div>` +
+    `<div class="stat-row"><span class="stat-label">Max slant coverage</span><span class="stat-value">${slantDiaKm.toFixed(0)} km dia</span></div>` +
+    `<div class="stat-row"><span class="stat-label">Max slant range</span><span class="stat-value">${slantRange.toFixed(0)} km</span></div>`;
+
+  // Force recompute contacts
+  cachedContactAnalysis = null;
+  lastContactCompute = 0;
+}
+
 function labelToScreen(el, pos3d) {
   const sp = pos3d.clone().project(camera);
   if (sp.z > 1) { el.style.display = 'none'; return; }
@@ -1007,7 +1106,7 @@ function analyzeCurrentContacts(gmst) {
       const eci = propagate(sat, tSec);
       const ecef = eciToEcef(eci, gmst);
       const { el, rng, nadirAngle } = elevation(ecef, gndEcef);
-      if (nadirAngle <= NADIR_LIMIT_DEG && el >= target.minElev) {
+      if (nadirAngle <= MAX_SLANT_DEG && el >= target.minElev) {
         inView[key].push({ id: `${c.name}-${i + 1}`, el: el.toFixed(1), rng: rng.toFixed(0), nadir: nadirAngle.toFixed(1) });
       }
     });
@@ -1033,7 +1132,7 @@ function compute24Hr() {
         const eci = propagate(sat, tSec);
         const ecef = eciToEcef(eci, gmst);
         const { el, nadirAngle } = elevation(ecef, gndEcef);
-        if (nadirAngle <= NADIR_LIMIT_DEG && el >= target.minElev) {
+        if (nadirAngle <= MAX_SLANT_DEG && el >= target.minElev) {
           if (!inPass) { inPass = true; passStart = t; maxEl = el; }
           maxEl = Math.max(maxEl, el);
           totalMin[key] += 0.5;
@@ -1259,6 +1358,8 @@ function animate(t) {
 // ================================================================
 initScene();
 updateTarget();
+updateSensorGeometry();
+onConstellationToggle();
 animate(performance.now());
 </script>
 </body>
